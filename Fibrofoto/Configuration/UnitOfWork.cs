@@ -10,6 +10,8 @@ namespace Fibrofoto.Configuration
 
         public IClienteRepository ClienteRepository { get; private set; }
 
+        public object Cliente => throw new NotImplementedException();
+
         public UnitOfWork(FibrofotoContext context)
         {
             _context= context;

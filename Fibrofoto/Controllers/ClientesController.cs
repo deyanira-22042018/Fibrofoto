@@ -2,160 +2,100 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using Fibrofoto.Data;
 using Fibrofoto.Models;
+using Fibrofoto.Commands;
+using Fibrofoto.QueryHandler;
+using Fibrofoto.DTOS;
 
 namespace Fibrofoto.Controllers
 {
-    public class ClientesController : Controller
+    [Route("api/[controller]")]
+    [ApiController]
+    public class PermissionsController : ControllerBase
     {
-        private readonly FibrofotoContext _context;
+        private readonly ICommandHandler<ClienteDTO> _ClienteCommandHandler;
+        private readonly ICommandHandler<RemoveByIdCommand> _removeCommandHandler;
+        private readonly IQueryHandler<Cliente, QueryByIdCommand> _ClienteQueryHandler;
 
-        public ClientesController(FibrofotoContext context)
+        public PermissionsController(
+            ICommandHandler<ClienteDTO> ClienteCommandHandler,
+            ICommandHandler<RemoveByIdCommand> removeCommandHandler,
+            IQueryHandler<Cliente, QueryByIdCommand> ClienteQueryHandler
+            )
         {
-            _context = context;
+            _ClienteCommandHandler = ClienteCommandHandler;
+            _removeCommandHandler = removeCommandHandler;
+            _ClienteQueryHandler = ClienteQueryHandler;
+            _kafkaProducerHandler = kafkaProducerHandler;
         }
 
-        // GET: Clientes
-        public async Task<IActionResult> Index()
+        // GET: api/Permissions
+        [HttpGet]
+        public async Task<ActionResult<IEnumerable<Cliente>>> GetPermission()
         {
-              return View(await _context.Cliente.ToListAsync());
+            _kafkaProducerHandler.WriteMessage("GET");
+            var permissions = await _ClienteQueryHandler.GetAll();
+            return Ok(Cliente);
         }
 
-        // GET: Clientes/Details/5
-        public async Task<IActionResult> Details(int? id)
+        // GET: api/Permissions/5
+        [HttpGet("{id}")]
+        public async Task<ActionResult<Cliente>> GetPermission(int id)
         {
-            if (id == null || _context.Cliente == null)
+            _kafkaProducerHandler.WriteMessage("GET");
+            var Cliente = await _ClienteQueryHandler.GetOne(new QueryByIdCommand()
+            {
+                Id = id
+            });
+
+            if (Cliente == null)
             {
                 return NotFound();
             }
 
-            var cliente = await _context.Cliente
-                .FirstOrDefaultAsync(m => m.Id == id);
-            if (cliente == null)
+            return Ok(Cliente);
+        }
+
+        // PUT: api/Permissions/5
+        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
+        [HttpPut("{id}")]
+        public async Task<IActionResult> PutCliente(int id, ClienteDTO Cliente)
+        {
+            _kafkaProducerHandler.WriteMessage("PUT");
+            if (id != Cliente.Id)
             {
-                return NotFound();
+                return BadRequest();
             }
 
-            return View(cliente);
+            _ClienteCommandHandler.Execute(Cliente);
+            return NoContent();
         }
 
-        // GET: Clientes/Create
-        public IActionResult Create()
-        {
-            return View();
-        }
-
-        // POST: Clientes/Create
-        // To protect from overposting attacks, enable the specific properties you want to bind to.
-        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
+        // POST: api/Permissions
+        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
         [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("Id,Name,Apellido,Direccion,Numero,RetabloId")] Cliente cliente)
+        public IActionResult PostPermission(ClienteDTO Cliente)
         {
-            if (ModelState.IsValid)
-            {
-                _context.Add(cliente);
-                await _context.SaveChangesAsync();
-                return RedirectToAction(nameof(Index));
-            }
-            return View(cliente);
+            _kafkaProducerHandler.WriteMessage("POST");
+            _ClienteCommandHandler.Execute(Cliente);
+            return CreatedAtAction("GetPermission", new { id = Cliente.Id }, Cliente);
         }
 
-        // GET: Clientes/Edit/5
-        public async Task<IActionResult> Edit(int? id)
+        // DELETE: api/Permissions/5
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteCliente(int id)
         {
-            if (id == null || _context.Cliente == null)
+            _kafkaProducerHandler.WriteMessage("DELETE");
+            _removeCommandHandler.Execute(new RemoveByIdCommand()
             {
-                return NotFound();
-            }
-
-            var cliente = await _context.Cliente.FindAsync(id);
-            if (cliente == null)
-            {
-                return NotFound();
-            }
-            return View(cliente);
+                Id = id
+            });
+            return NoContent();
         }
 
-        // POST: Clientes/Edit/5
-        // To protect from overposting attacks, enable the specific properties you want to bind to.
-        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("Id,Name,Apellido,Direccion,Numero,RetabloId")] Cliente cliente)
-        {
-            if (id != cliente.Id)
-            {
-                return NotFound();
-            }
-
-            if (ModelState.IsValid)
-            {
-                try
-                {
-                    _context.Update(cliente);
-                    await _context.SaveChangesAsync();
-                }
-                catch (DbUpdateConcurrencyException)
-                {
-                    if (!ClienteExists(cliente.Id))
-                    {
-                        return NotFound();
-                    }
-                    else
-                    {
-                        throw;
-                    }
-                }
-                return RedirectToAction(nameof(Index));
-            }
-            return View(cliente);
-        }
-
-        // GET: Clientes/Delete/5
-        public async Task<IActionResult> Delete(int? id)
-        {
-            if (id == null || _context.Cliente == null)
-            {
-                return NotFound();
-            }
-
-            var cliente = await _context.Cliente
-                .FirstOrDefaultAsync(m => m.Id == id);
-            if (cliente == null)
-            {
-                return NotFound();
-            }
-
-            return View(cliente);
-        }
-
-        // POST: Clientes/Delete/5
-        [HttpPost, ActionName("Delete")]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> DeleteConfirmed(int id)
-        {
-            if (_context.Cliente == null)
-            {
-                return Problem("Entity set 'FibrofotoContext.Cliente'  is null.");
-            }
-            var cliente = await _context.Cliente.FindAsync(id);
-            if (cliente != null)
-            {
-                _context.Cliente.Remove(cliente);
-            }
-            
-            await _context.SaveChangesAsync();
-            return RedirectToAction(nameof(Index));
-        }
-
-        private bool ClienteExists(int id)
-        {
-          return _context.Cliente.Any(e => e.Id == id);
-        }
     }
 }

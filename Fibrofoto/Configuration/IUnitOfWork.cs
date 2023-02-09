@@ -6,6 +6,7 @@ namespace Fibrofoto.Configuration
     {
         IRetablosRepository RetablosRepository { get; }
         IClienteRepository ClienteRepository { get; }
+        object Cliente { get; }
 
         void commit ();
         void Dispose ();
